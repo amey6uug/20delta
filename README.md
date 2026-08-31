@@ -1,1 +1,2 @@
-# 20delta
+# 20DeltaStrangle
+Nifty + Sensex
