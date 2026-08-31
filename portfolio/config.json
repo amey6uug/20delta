@@ -1,0 +1,42 @@
+{
+  "capital_per_strategy": 550000,
+  "capital_combined": 1100000,
+  "comparison_window": {
+    "start": "2024-01-01",
+    "end": "2026-06-30"
+  },
+  "brokerage_per_order": 0,
+  "charges": {
+    "brokerage_per_order": 0,
+    "gst_rate": 0.18,
+    "sebi_per_crore": 10,
+    "stamp_buy_pct": 0.00003,
+    "ipft_per_crore": 50,
+    "nse_options_exchange_pct": 0.0003503,
+    "nse_options_exchange_pct_legacy": 0.000495,
+    "nse_exchange_change_date": "2024-10-01",
+    "bse_sensex_options_exchange_pct": 0.000325,
+    "bse_sensex_options_exchange_pct_legacy": 0.00005,
+    "bse_exchange_change_date": "2024-10-01",
+    "stt_sell_schedule": [
+      ["2026-04-01", 0.0015],
+      ["2023-04-01", 0.0010],
+      ["1900-01-01", 0.000625]
+    ],
+    "_notes": "Date-aware STT & exchange rates per trade date. STT on sell premium only. Algotest applies current rates to full backtest."
+  },
+  "strategies": {
+    "strangle_20d": {
+      "name": "20Δ Short Strangle",
+      "description": "NIFTY + SENSEX | 9:45 entry | ~20Δ CE+PE | 50% premium SL | BE trail | 3:15 EOD",
+      "csv_path": "data/Nifty+Sensex_945_new.csv",
+      "dayfirst": false
+    },
+    "theta_shifting": {
+      "name": "Theta Shifting Straddle",
+      "description": "SENSEX ATM straddle | 9:45 + 11:45 entry | ₹50 fixed leg SL | BE trail | 3:15 EOD",
+      "csv_path": "data/Thetashift.csv",
+      "dayfirst": false
+    }
+  }
+}

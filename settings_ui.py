@@ -6,6 +6,7 @@ import json
 import pandas as pd
 import streamlit as st
 
+from engine import alerts
 from engine.calendar import format_timestamp_day
 from engine.config_service import config_service
 from engine.db import db_manager
@@ -172,3 +173,19 @@ def render_settings_page():
             st.rerun()
         else:
             st.error(f"❌ {msg}")
+
+    # ── Trade Alerts ───────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("📲 Trade Alerts")
+    active = alerts.configured_channels()
+    if active:
+        st.markdown(f"Active channels: **{', '.join(active)}** — alerts fire on entry, stop loss, target, and forced exit.")
+    else:
+        st.info("No alert channel configured. Add Telegram / Twilio WhatsApp keys to `.env` (see `.env.example`) and restart.")
+
+    if st.button("📨 Send Test Alert", disabled=not active):
+        delivered, errors = alerts.send_sync(f"✅ Test alert from AlgoTest OS — {format_timestamp_day()}")
+        if delivered:
+            st.success(f"Delivered via {', '.join(delivered)}")
+        for err in errors:
+            st.error(err)
