@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+<title>20DeltaStrangle - AlgoTest OS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.css" />
+<style>
+  html, body { margin:0; padding:0; background:#0d1117; color:#f0f6fc;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  #boot { padding:3rem 2rem; max-width:640px; margin:0 auto; }
+  #boot h1 { font-size:1.4rem; margin:0 0 .5rem; }
+  #boot p { color:#8b949e; line-height:1.6; font-size:.9rem; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #30363d;
+    border-top-color:#39d353; border-radius:50%; animation:s .8s linear infinite;
+    vertical-align:middle; margin-right:.5rem; }
+  @keyframes s { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="boot">
+  <h1><span class="spin"></span>Starting 20DeltaStrangle</h1>
+  <p>Downloading the Python runtime and installing packages in your browser.
+     First load takes 30-60 seconds; afterwards it is cached.</p>
+  <p><strong>Live Dashboard</strong> and <strong>Live Test</strong> show indicative
+     reference prices - browsers cannot open the sockets that yfinance and the
+     Flattrade API require.</p>
+</div>
+<div id="root"></div>
+<script type="module">
+import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js";
+mount(
+  {
+    requirements: ["plotly", "pytz", "pyotp", "python-dotenv", "requests"],
+    entrypoint: "app.py",
+    files: {
+      "app.py": { url: "./app.py" },
+      "audit_ui.py": { url: "./audit_ui.py" },
+      "backtest_ui.py": { url: "./backtest_ui.py" },
+      "calendar_ui.py": { url: "./calendar_ui.py" },
+      "compare_ui.py": { url: "./compare_ui.py" },
+      "data/live_trades.csv": { url: "./data/live_trades.csv" },
+      "data/live_trades_theta.csv": { url: "./data/live_trades_theta.csv" },
+      "data/Nifty+Sensex_945.csv": { url: "./data/Nifty+Sensex_945.csv" },
+      "data/Nifty+Sensex_945_new.csv": { url: "./data/Nifty+Sensex_945_new.csv" },
+      "data/options_os.db": { url: "./data/options_os.db" },
+      "data/Thetashift.csv": { url: "./data/Thetashift.csv" },
+      "data/ThetaShifting.csv": { url: "./data/ThetaShifting.csv" },
+      "data/ThetaShifting_9_20,11_20.csv": { url: "./data/ThetaShifting_9_20,11_20.csv" },
+      "deployment_ui.py": { url: "./deployment_ui.py" },
+      "engine/__init__.py": { url: "./engine/__init__.py" },
+      "engine/alerts.py": { url: "./engine/alerts.py" },
+      "engine/backtest_engine.py": { url: "./engine/backtest_engine.py" },
+      "engine/broker_adapter.py": { url: "./engine/broker_adapter.py" },
+      "engine/calendar.py": { url: "./engine/calendar.py" },
+      "engine/config_service.py": { url: "./engine/config_service.py" },
+      "engine/db.py": { url: "./engine/db.py" },
+      "engine/margin_calc.py": { url: "./engine/margin_calc.py" },
+      "engine/market_data.py": { url: "./engine/market_data.py" },
+      "engine/models.py": { url: "./engine/models.py" },
+      "engine/risk_engine.py": { url: "./engine/risk_engine.py" },
+      "engine/strategy_engine.py": { url: "./engine/strategy_engine.py" },
+      "engine/strike_selector.py": { url: "./engine/strike_selector.py" },
+      "flattrade_fetch.py": { url: "./flattrade_fetch.py" },
+      "home.py": { url: "./home.py" },
+      "live_dashboard.py": { url: "./live_dashboard.py" },
+      "live_test_ui.py": { url: "./live_test_ui.py" },
+      "margin_ui.py": { url: "./margin_ui.py" },
+      "nav.py": { url: "./nav.py" },
+      "portfolio/__init__.py": { url: "./portfolio/__init__.py" },
+      "portfolio/algotest_loader.py": { url: "./portfolio/algotest_loader.py" },
+      "portfolio/analysis.py": { url: "./portfolio/analysis.py" },
+      "portfolio/charges.py": { url: "./portfolio/charges.py" },
+      "portfolio/config.json": { url: "./portfolio/config.json" },
+      "portfolio/dashboard.py": { url: "./portfolio/dashboard.py" },
+      "portfolio/returns.py": { url: "./portfolio/returns.py" },
+      "portfolio/yearly.py": { url: "./portfolio/yearly.py" },
+      "portfolio_app.py": { url: "./portfolio_app.py" },
+      "settings_ui.py": { url: "./settings_ui.py" },
+      "strangle/__init__.py": { url: "./strangle/__init__.py" },
+      "strangle/dashboard.py": { url: "./strangle/dashboard.py" },
+      "strangle/loader.py": { url: "./strangle/loader.py" },
+      "strategy_dashboard.py": { url: "./strategy_dashboard.py" },
+      "theme.py": { url: "./theme.py" },
+      "theta/__init__.py": { url: "./theta/__init__.py" },
+      "theta/dashboard.py": { url: "./theta/dashboard.py" },
+      "theta/labels.py": { url: "./theta/labels.py" },
+      "theta/loader.py": { url: "./theta/loader.py" },
+      ".streamlit/config.toml": "[theme]\nbase = \"dark\"\nprimaryColor = \"#39d353\"\nbackgroundColor = \"#0d1117\"\nsecondaryBackgroundColor = \"#161b22\"\ntextColor = \"#f0f6fc\"\n"
+    },
+    streamlitConfig: { "client.toolbarMode": "viewer" }
+  },
+  document.getElementById("root")
+).then(() => { document.getElementById("boot").style.display = "none"; });
+</script>
+</body>
+</html>

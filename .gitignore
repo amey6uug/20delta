@@ -8,7 +8,5 @@ __pycache__/
 .env
 .streamlit/secrets.toml
 
-# trade data & local state (real P&L, live positions)
-data/
-*.db
+# NOTE: data/ intentionally published for the stlite GitHub Pages build
 *.log
