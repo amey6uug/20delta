@@ -31,7 +31,7 @@
 import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js";
 mount(
   {
-    requirements: ["plotly", "pytz", "pyotp", "python-dotenv", "requests"],
+    requirements: ["sqlite3", "plotly", "pytz", "pyotp", "python-dotenv", "requests"],
     entrypoint: "app.py",
     files: {
       "app.py": { url: "./app.py" },
@@ -91,7 +91,14 @@ mount(
     streamlitConfig: { "client.toolbarMode": "viewer" }
   },
   document.getElementById("root")
-).then(() => { document.getElementById("boot").style.display = "none"; });
+);
+const _boot = setInterval(() => {
+  const app = document.querySelector('[data-testid="stApp"]');
+  if (app && (app.innerText || "").length > 100) {
+    document.getElementById("boot").style.display = "none";
+    clearInterval(_boot);
+  }
+}, 500);
 </script>
 </body>
 </html>
