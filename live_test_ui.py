@@ -16,6 +16,7 @@ from engine.config_service import config_service
 from engine.market_data import market_data_service
 from engine.models import ExitReason, MarketDataStatus, OptionType, StrategyState, TransactionType
 from engine.strategy_engine import StrategyExecutionSession
+from engine.strike_selector import StrikeSelector
 from theme import (
     BLUE, GREEN, RED, GOLD, PURPLE, MUTED,
     color_for, fmt_inr, page_header, render_risk_banner, render_table,
@@ -60,6 +61,13 @@ def render_live_test_page():
 
     session: StrategyExecutionSession = st.session_state["paper_session"]
 
+    result = st.session_state.pop("entry_result", None)
+    if result:
+        kind, text = result
+        (st.success if kind == "success" else st.error)(
+            ("✅ " if kind == "success" else "❌ ") + text
+        )
+
     # ── Control Bar ────────────────────────────────────────────────────────────
     st.markdown("##### 🎮 Paper Trading Session Controls")
     with st.container(border=True):
@@ -84,21 +92,54 @@ def render_live_test_page():
 
     if enter_btn:
         trading_d = now_ist.strftime("%d-%m-%Y")
-        success, msg = session.execute_entry(
-            spot_price=n_spot,
-            trading_date=trading_d,
-            entry_time_str="09:45:00 AM",
-            ce_main_premium=48.0,
-            pe_main_premium=50.0,
-            ce_hedge_premium=12.0,
-            pe_hedge_premium=11.5,
-            num_lots=1,
-            current_datetime=now_ist,
-        )
-        if success:
-            st.success(f"✅ {msg}")
+
+        # Premiums must come from the market. There is no safe placeholder for an
+        # option price, so entry is refused outright when quotes are unavailable.
+        if n_status != MarketDataStatus.LIVE or n_spot <= 0:
+            success, msg = False, (
+                f"No live {cfg.underlying} spot price - cannot select strikes. "
+                f"{market_data_service.get_last_error()}"
+            )
         else:
-            st.error(f"❌ {msg}")
+            sel = StrikeSelector.select_strikes(cfg.underlying, n_spot, trading_d, cfg)
+            if not sel.is_valid:
+                success, msg = False, sel.rejection_reason
+            else:
+                wanted = [
+                    ("ce_main_premium", sel.ce_main_strike, "CE"),
+                    ("pe_main_premium", sel.pe_main_strike, "PE"),
+                    ("ce_hedge_premium", sel.ce_hedge_strike, "CE"),
+                    ("pe_hedge_premium", sel.pe_hedge_strike, "PE"),
+                ]
+                premiums, missing = {}, []
+                for name, strike, opt in wanted:
+                    if strike is None:            # hedges are optional in config
+                        premiums[name] = 0.0
+                        continue
+                    ltp, q_status = market_data_service.get_option_ltp(
+                        cfg.underlying, sel.expiry, strike, opt
+                    )
+                    if q_status != MarketDataStatus.LIVE:
+                        missing.append(f"{strike:,.0f}{opt}")
+                    premiums[name] = ltp
+
+                if missing:
+                    success, msg = False, (
+                        "No live quotes for " + ", ".join(missing) + ". "
+                        + (market_data_service.get_last_error() or "Broker not connected.")
+                    )
+                else:
+                    success, msg = session.execute_entry(
+                        spot_price=n_spot,
+                        trading_date=trading_d,
+                        entry_time_str="09:45:00 AM",
+                        num_lots=1,
+                        current_datetime=now_ist,
+                        **premiums,
+                    )
+        # st.rerun() discards anything rendered in this run, so the banner has to
+        # survive in session_state and be drawn on the next pass instead.
+        st.session_state["entry_result"] = ("success" if success else "error", msg)
         st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)

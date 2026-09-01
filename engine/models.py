@@ -217,6 +217,7 @@ class Order:
     status: OrderStatus = OrderStatus.PENDING
     reason: str = ""
     source: str = "SYSTEM"
+    broker_order_id: str = ""  # id returned by the live broker
 
 
 @dataclass

@@ -44,7 +44,7 @@ def render_deployment_page():
 
     # ── Broker Configuration & Credentials Status ──────────────────────────────
     st.markdown("##### 🔌 Broker Adapter Configuration")
-    flattrade_user = os.getenv("FLATTRADE_USER_ID", "FT_DEMO_USER")
+    flattrade_user = os.getenv("FLATTRADE_USER_ID", "").strip() or "not configured"
     with st.container(border=True):
         b_col1, b_col2 = st.columns(2)
         with b_col1:

@@ -120,6 +120,123 @@ def get_trade_book(session_token):
     return data  # list of trade dicts
 
 
+# ── Live Quotes ────────────────────────────────────────────────────────────────
+
+# Index scrip names as they appear in Noren's SearchScrip results.
+_INDEX_SCRIP = {
+    "NIFTY":     ("NSE", "Nifty 50"),
+    "BANKNIFTY": ("NSE", "Nifty Bank"),
+    "SENSEX":    ("BSE", "SENSEX"),
+}
+
+# Session tokens are valid for the trading day. Re-logging in on every Streamlit
+# rerun would burn TOTP codes and hit rate limits, so the token is cached here.
+_SESSION = {"token": None, "date": None}
+
+
+def get_session(force=False):
+    """Return a cached session token, logging in only once per calendar day."""
+    from datetime import date as _date
+    today = _date.today()
+    if force or _SESSION["token"] is None or _SESSION["date"] != today:
+        _SESSION["token"] = login()
+        _SESSION["date"] = today
+    return _SESSION["token"]
+
+
+def _post(endpoint, session_token, jdata, timeout=10):
+    """POST to a NorenAPI endpoint using the jKey/jData form. Returns parsed JSON."""
+    payload = f"jKey={session_token}&jData={json.dumps(jdata)}"
+    resp = requests.post(f"{BASE_URL}/{endpoint}", data=payload, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    if isinstance(data, dict) and data.get("stat") == "Not_Ok":
+        raise ValueError(f"{endpoint}: {data.get('emsg', data)}")
+    return data
+
+
+def search_scrip(session_token, text, exch="NFO"):
+    """Resolve a symbol to its exchange token. Returns list of match dicts."""
+    uid = os.getenv("FLATTRADE_USER_ID", "").strip()
+    data = _post("SearchScrip", session_token, {"uid": uid, "stext": text, "exch": exch})
+    return data.get("values", []) if isinstance(data, dict) else []
+
+
+def get_quotes(session_token, exch, token):
+    """Raw quote payload for one instrument token (lp, c, o, h, l, v ...)."""
+    uid = os.getenv("FLATTRADE_USER_ID", "").strip()
+    return _post("GetQuotes", session_token, {"uid": uid, "exch": exch, "token": str(token)})
+
+
+def get_index_spot(underlying, session_token=None):
+    """
+    Live index spot from Flattrade.
+    Returns (ltp, change, change_pct). Raises on failure - callers decide the fallback.
+    """
+    underlying = underlying.upper().strip()
+    if underlying not in _INDEX_SCRIP:
+        raise ValueError(f"Unknown index: {underlying}")
+    exch, name = _INDEX_SCRIP[underlying]
+    tok = session_token or get_session()
+
+    hits = search_scrip(tok, name, exch)
+    if not hits:
+        raise ValueError(f"No scrip found for {name} on {exch}")
+    # Prefer an exact name match; SearchScrip returns fuzzy hits ordered loosely.
+    match = next((h for h in hits if h.get("tsym", "").upper() == name.upper()), hits[0])
+
+    q = get_quotes(tok, exch, match["token"])
+    ltp = float(q.get("lp") or 0.0)
+    prev = float(q.get("c") or 0.0)          # 'c' is previous close on Noren
+    chg = ltp - prev
+    pct = (chg / prev * 100.0) if prev else 0.0
+    return round(ltp, 2), round(chg, 2), round(pct, 2)
+
+
+def get_option_quote(tsym, exch="NFO", session_token=None):
+    """
+    Live quote for one option contract by trading symbol.
+    Returns dict with ltp/bid/ask/volume, or raises.
+    """
+    tok = session_token or get_session()
+    hits = search_scrip(tok, tsym, exch)
+    if not hits:
+        raise ValueError(f"No contract found for {tsym} on {exch}")
+    match = next((h for h in hits if h.get("tsym", "").upper() == tsym.upper()), hits[0])
+
+    q = get_quotes(tok, exch, match["token"])
+    return {
+        "tsym":   q.get("tsym", tsym),
+        "token":  match["token"],
+        "ltp":    float(q.get("lp") or 0.0),
+        "bid":    float(q.get("bp1") or 0.0),
+        "ask":    float(q.get("sp1") or 0.0),
+        "volume": float(q.get("v") or 0.0),
+    }
+
+
+def get_option_chain(tsym, strike, exch="NFO", count=5, session_token=None):
+    """
+    Option chain around `strike` for the given contract symbol.
+    Returns the raw Noren 'values' list (each entry has tsym, token, optt, strprc).
+    """
+    uid = os.getenv("FLATTRADE_USER_ID", "").strip()
+    tok = session_token or get_session()
+    data = _post("GetOptionChain", tok, {
+        "uid": uid, "exch": exch, "tsym": tsym,
+        "strprc": str(strike), "cnt": str(count),
+    })
+    return data.get("values", []) if isinstance(data, dict) else []
+
+
+def credentials_present():
+    """True when enough .env vars exist to attempt a Flattrade login."""
+    return all(os.getenv(k, "").strip() for k in (
+        "FLATTRADE_USER_ID", "FLATTRADE_PASSWORD",
+        "FLATTRADE_API_KEY", "FLATTRADE_API_SECRET", "FLATTRADE_TOTP_SECRET",
+    ))
+
+
 # ── Symbol Parsing ─────────────────────────────────────────────────────────────
 
 _MONTH_ABB = {

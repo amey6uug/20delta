@@ -22,6 +22,8 @@ class MarketDataService:
     def __init__(self, stale_threshold_seconds: int = 60):
         self.stale_threshold_seconds = stale_threshold_seconds
         self._cached_quotes: Dict[str, MarketQuote] = {}
+        self._last_error: str = ""
+        self._angel = None
 
     def validate_quote(self, quote: MarketQuote) -> Tuple[bool, str]:
         """Validate option quote structure and positive price."""
@@ -40,7 +42,8 @@ class MarketDataService:
             # Try ISO format
             q_time = datetime.fromisoformat(timestamp_str)
         except Exception:
-            return MarketDataStatus.DEMO
+            # An unreadable timestamp means unknown freshness, not demo data.
+            return MarketDataStatus.UNAVAILABLE
 
         now = get_current_ist_time()
         if q_time.tzinfo is None:
@@ -61,7 +64,17 @@ class MarketDataService:
         """
         underlying = underlying.upper().strip()
 
-        # Check if live yfinance is available
+        # 1. Live broker quote (Flattrade NorenAPI) - only source that is truly real-time.
+        try:
+            import flattrade_fetch as ft
+            if ft.credentials_present():
+                ltp, chg, pct = ft.get_index_spot(underlying)
+                if ltp > 0:
+                    return ltp, chg, pct, MarketDataStatus.LIVE
+        except Exception as e:
+            self._last_error = f"Flattrade spot failed for {underlying}: {e}"
+
+        # 2. Check if live yfinance is available
         try:
             import yfinance as yf
             ticker_map = {"NIFTY": "^NSEI", "SENSEX": "^BSESN", "BANKNIFTY": "^NSEBANK"}
@@ -78,14 +91,106 @@ class MarketDataService:
         except Exception:
             pass
 
-        # Fallback indicative market reference values
-        defaults = {
-            "NIFTY": (24_250.0, 65.5, 0.27),
-            "SENSEX": (79_800.0, 195.0, 0.24),
-            "BANKNIFTY": (51_200.0, 110.0, 0.22),
-        }
-        ref = defaults.get(underlying, (24_000.0, 0.0, 0.0))
-        return ref[0], ref[1], ref[2], MarketDataStatus.DEMO
+        # 3. No live source reachable. Report that honestly rather than inventing
+        #    a plausible-looking price the UI would render as if it were real.
+        if not self._last_error:
+            self._last_error = f"No live market data source available for {underlying}"
+        return 0.0, 0.0, 0.0, MarketDataStatus.UNAVAILABLE
+
+    def get_option_quote(self, tsym: str, exch: str = "NFO") -> Tuple[Optional[MarketQuote], MarketDataStatus]:
+        """
+        Live option quote by trading symbol. Returns (quote, status).
+        Returns (None, UNAVAILABLE) when the broker is not configured or the
+        contract cannot be resolved - callers must handle that, since there is
+        no meaningful synthetic price for a specific option contract.
+        """
+        try:
+            import flattrade_fetch as ft
+            if not ft.credentials_present():
+                self._last_error = "Flattrade credentials not configured (.env)"
+                return None, MarketDataStatus.UNAVAILABLE
+            q = ft.get_option_quote(tsym, exch=exch)
+        except Exception as e:
+            self._last_error = f"Option quote failed for {tsym}: {e}"
+            return None, MarketDataStatus.UNAVAILABLE
+
+        if q["ltp"] <= 0:
+            return None, MarketDataStatus.UNAVAILABLE
+
+        # flattrade_fetch already knows how to parse NFO/BFO symbols - reuse it
+        parsed = ft._parse_symbol(q["tsym"]) or ft._parse_symbol(tsym)
+        underlying, expiry, strike, opt = parsed if parsed else (tsym, "", 0, "CE")
+
+        quote = MarketQuote(
+            symbol=q["tsym"],
+            underlying=underlying,
+            expiry=expiry,
+            strike=float(strike),
+            option_type=OptionType.CE if opt == "CE" else OptionType.PE,
+            ltp=q["ltp"],
+            bid=q["bid"],
+            ask=q["ask"],
+            volume=int(q["volume"]),
+            timestamp=get_current_ist_time().isoformat(),
+            status=MarketDataStatus.LIVE,
+        )
+        self._cached_quotes[q["tsym"]] = quote
+        return quote, MarketDataStatus.LIVE
+
+
+    def get_option_ltp(
+        self, underlying: str, expiry: str, strike: float, option_type: str
+    ) -> Tuple[float, MarketDataStatus]:
+        """
+        Live LTP for one option contract, addressed by its components rather than
+        a broker-specific trading symbol.
+
+        `expiry` accepts an ISO date (2026-09-01) or Angel's own 01SEP2026 form.
+        Returns (0.0, UNAVAILABLE) when no broker is configured - there is no
+        sensible synthetic price for a specific contract, so callers must refuse
+        to trade rather than guess.
+        """
+        try:
+            from engine import angel_broker as ab
+        except Exception as e:
+            self._last_error = f"Angel adapter unavailable: {e}"
+            return 0.0, MarketDataStatus.UNAVAILABLE
+
+        if not ab.credentials_present():
+            self._last_error = "Angel One credentials not configured (.env)"
+            return 0.0, MarketDataStatus.UNAVAILABLE
+
+        # Normalise ISO dates to Angel's DDMMMYYYY.
+        exp = str(expiry).strip()
+        if "-" in exp:
+            try:
+                exp = datetime.strptime(exp[:10], "%Y-%m-%d").strftime("%d%b%Y").upper()
+            except ValueError:
+                self._last_error = f"Unparseable expiry: {expiry}"
+                return 0.0, MarketDataStatus.UNAVAILABLE
+
+        try:
+            adapter = self._angel_adapter()
+            ltp = adapter.get_ltp(underlying, exp, float(strike), option_type)
+        except Exception as e:
+            self._last_error = f"Angel LTP failed for {underlying} {exp} {strike}{option_type}: {e}"
+            return 0.0, MarketDataStatus.UNAVAILABLE
+
+        if ltp <= 0:
+            self._last_error = f"No quote for {underlying} {exp} {strike}{option_type}"
+            return 0.0, MarketDataStatus.UNAVAILABLE
+        return ltp, MarketDataStatus.LIVE
+
+    def _angel_adapter(self):
+        """One Angel session per process - logging in per quote would burn TOTP codes."""
+        if getattr(self, "_angel", None) is None:
+            from engine.angel_broker import AngelOneBrokerAdapter
+            self._angel = AngelOneBrokerAdapter()
+        return self._angel
+
+    def get_last_error(self) -> str:
+        """Reason the most recent live fetch fell back, for display in the UI."""
+        return getattr(self, "_last_error", "")
 
 
 market_data_service = MarketDataService()

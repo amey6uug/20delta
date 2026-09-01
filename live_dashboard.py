@@ -34,43 +34,49 @@ def render_live_dashboard():
         unsafe_allow_html=True,
     )
 
-    # ── 1. MARKET STATUS ───────────────────────────────────────────────────────
-    st.markdown("##### 🌐 Market Status")
-    n_spot, n_chg, n_pct, n_status = market_data_service.get_index_spot_price("NIFTY")
-    s_spot, s_chg, s_pct, s_status = market_data_service.get_index_spot_price("SENSEX")
+    # Live quotes refresh on their own so the rest of the page stays put.
+    @st.fragment(run_every="15s")
+    def _market_status():
+        # ── 1. MARKET STATUS ───────────────────────────────────────────────────────
+        st.markdown("##### 🌐 Market Status")
+        n_spot, n_chg, n_pct, n_status = market_data_service.get_index_spot_price("NIFTY")
+        s_spot, s_chg, s_pct, s_status = market_data_service.get_index_spot_price("SENSEX")
 
-    n_exp = get_expiry_date("NIFTY", now_ist)
-    n_dte = calculate_dte(now_ist, n_exp)
+        n_exp = get_expiry_date("NIFTY", now_ist)
+        n_dte = calculate_dte(now_ist, n_exp)
 
-    s_exp = get_expiry_date("SENSEX", now_ist)
-    s_dte = calculate_dte(now_ist, s_exp)
+        s_exp = get_expiry_date("SENSEX", now_ist)
+        s_dte = calculate_dte(now_ist, s_exp)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric(
-            "NIFTY 50",
-            f"{n_spot:,.2f}",
-            f"{n_chg:+.2f} ({n_pct:+.2f}%)",
-        )
-        st.caption(f"Status: **{n_status.value}** · Next Expiry: **{format_date_day(n_exp)}** (DTE: {n_dte})")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.metric(
+                "NIFTY 50",
+                f"{n_spot:,.2f}" if n_spot > 0 else "—",
+                f"{n_chg:+.2f} ({n_pct:+.2f}%)" if n_spot > 0 else "no live feed",
+            )
+            st.caption(f"Status: **{n_status.value}** · Next Expiry: **{format_date_day(n_exp)}** (DTE: {n_dte})")
 
-    with c2:
-        st.metric(
-            "SENSEX",
-            f"{s_spot:,.2f}",
-            f"{s_chg:+.2f} ({s_pct:+.2f}%)",
-        )
-        st.caption(f"Status: **{s_status.value}** · Next Expiry: **{format_date_day(s_exp)}** (DTE: {s_dte})")
+        with c2:
+            st.metric(
+                "SENSEX",
+                f"{s_spot:,.2f}" if s_spot > 0 else "—",
+                f"{s_chg:+.2f} ({s_pct:+.2f}%)" if s_spot > 0 else "no live feed",
+            )
+            st.caption(f"Status: **{s_status.value}** · Next Expiry: **{format_date_day(s_exp)}** (DTE: {s_dte})")
 
-    with c3:
-        st.metric("Strategy Capital", "₹10,00,000", "Testing Capital")
-        st.caption("Entry Window: **09:45 AM** · Forced Exit: **03:00 PM**")
+        with c3:
+            st.metric("Strategy Capital", "₹10,00,000", "Testing Capital")
+            st.caption("Entry Window: **09:45 AM** · Forced Exit: **03:00 PM**")
 
-    with c4:
-        st.metric("SENSEX ATM Short Rule", "PROHIBITED", "Hard Risk Rule Active")
-        st.caption("Hedge Requirement: **Active (Hedge-First Fill)**")
+        with c4:
+            st.metric("SENSEX ATM Short Rule", "PROHIBITED", "Hard Risk Rule Active")
+            st.caption("Hedge Requirement: **Active (Hedge-First Fill)**")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+
+    _market_status()
 
     # ── 2. ACTIVE STRATEGY & RISK MONITOR ──────────────────────────────────────
     cfg = config_service.get_config("strangle_20d")

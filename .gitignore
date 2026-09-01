@@ -10,3 +10,6 @@ __pycache__/
 
 # NOTE: data/ intentionally published for the stlite GitHub Pages build
 *.log
+
+# Angel One scrip master cache (~20MB, regenerated daily)
+.cache/
