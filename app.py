@@ -9,6 +9,12 @@ Navigation shell only. Each page's logic lives in its own module:
 Run:  streamlit run app.py
 """
 
+# Broker credentials must be loaded before any module reads os.getenv().
+# This previously happened only as a side effect of importing engine.alerts.
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import streamlit as st
 
 st.set_page_config(
