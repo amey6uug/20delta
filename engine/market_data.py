@@ -64,7 +64,18 @@ class MarketDataService:
         """
         underlying = underlying.upper().strip()
 
-        # 1. Live broker quote (Flattrade NorenAPI) - only source that is truly real-time.
+        # 1. Angel One - the configured execution broker, so its quotes are the
+        #    ones the strategy would actually trade against.
+        try:
+            from engine import angel_broker as ab
+            if ab.credentials_present():
+                ltp, chg, pct = self._angel_adapter().get_index_spot(underlying)
+                if ltp > 0:
+                    return ltp, chg, pct, MarketDataStatus.LIVE
+        except Exception as e:
+            self._last_error = f"Angel spot failed for {underlying}: {e}"
+
+        # 2. Live broker quote (Flattrade NorenAPI) - only source that is truly real-time.
         try:
             import flattrade_fetch as ft
             if ft.credentials_present():
@@ -74,7 +85,7 @@ class MarketDataService:
         except Exception as e:
             self._last_error = f"Flattrade spot failed for {underlying}: {e}"
 
-        # 2. Check if live yfinance is available
+        # 3. Check if live yfinance is available
         try:
             import yfinance as yf
             ticker_map = {"NIFTY": "^NSEI", "SENSEX": "^BSESN", "BANKNIFTY": "^NSEBANK"}
@@ -91,7 +102,7 @@ class MarketDataService:
         except Exception:
             pass
 
-        # 3. No live source reachable. Report that honestly rather than inventing
+        # 4. No live source reachable. Report that honestly rather than inventing
         #    a plausible-looking price the UI would render as if it were real.
         if not self._last_error:
             self._last_error = f"No live market data source available for {underlying}"

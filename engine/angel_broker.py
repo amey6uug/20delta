@@ -123,6 +123,22 @@ def resolve_option_token(
     return None
 
 
+
+def resolve_index_token(underlying: str) -> Optional[Dict[str, Any]]:
+    """
+    Find the index instrument itself (not an option on it).
+    Angel lists indices as instrumenttype AMXIDX - e.g. NIFTY -> "Nifty 50"
+    on NSE, SENSEX -> "SENSEX" on BSE.
+    """
+    underlying = underlying.upper().strip()
+    for s in load_scrip_master():
+        if s.get("instrumenttype") != "AMXIDX":
+            continue
+        if (s.get("name") or "").upper() == underlying:
+            return s
+    return None
+
+
 # -- Adapter -------------------------------------------------------------------
 
 class AngelOneBrokerAdapter(BrokerAdapter):
@@ -220,6 +236,27 @@ class AngelOneBrokerAdapter(BrokerAdapter):
         return (pos.get("data") or []) if isinstance(pos, dict) else []
 
     # -- quotes ----------------------------------------------------------------
+
+
+    def get_index_spot(self, underlying: str) -> tuple:
+        """
+        Live index spot from Angel. Returns (ltp, change, change_pct).
+        Raises on failure so the caller can fall through to another source.
+        """
+        self._require_session()
+        scrip = resolve_index_token(underlying)
+        if not scrip:
+            raise ValueError(f"No index instrument for {underlying} in scrip master")
+
+        r = self._smart.ltpData(scrip["exch_seg"], scrip["symbol"], scrip["token"])
+        d = (r.get("data") or {}) if isinstance(r, dict) else {}
+        ltp = float(d.get("ltp") or 0.0)
+        prev = float(d.get("close") or 0.0)      # previous close
+        if ltp <= 0:
+            raise ValueError(f"Angel returned no LTP for {underlying}: {r}")
+        chg = ltp - prev
+        pct = (chg / prev * 100.0) if prev else 0.0
+        return round(ltp, 2), round(chg, 2), round(pct, 2)
 
     def get_ltp(self, underlying: str, expiry: str, strike: float, option_type: str) -> float:
         """Live LTP for one option contract. 0.0 when it cannot be resolved."""
