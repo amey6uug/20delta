@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import os
+
 import streamlit as st
 
 st.set_page_config(
@@ -23,6 +25,43 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# On Streamlit Cloud there is no .env - credentials arrive via st.secrets.
+# The engine reads os.getenv() throughout, so mirror them into the environment
+# rather than threading a second config path through every module.
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str) and _k not in os.environ:
+            os.environ[_k] = _v
+except Exception:
+    pass  # no secrets.toml locally, and st.secrets is absent under stlite
+
+
+def _require_password() -> None:
+    """
+    Gate the app when APP_PASSWORD is set.
+
+    A public deployment holds live broker credentials server-side; without a
+    gate any visitor could drive this account. No password configured means no
+    gate, so local runs are unaffected.
+    """
+    expected = os.environ.get("APP_PASSWORD", "").strip()
+    if not expected or st.session_state.get("_authed"):
+        return
+
+    st.title("🔒 AlgoTest OS")
+    st.caption("This deployment is connected to a live broker account.")
+    entered = st.text_input("Password", type="password")
+    if entered:
+        if entered == expected:
+            st.session_state["_authed"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    st.stop()
+
+
+_require_password()
 
 from theme import inject_theme
 

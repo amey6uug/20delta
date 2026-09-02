@@ -11,10 +11,13 @@ The live version runs entirely in your browser via
 served as static files from GitHub Pages. First load takes 30–60s while the
 Python runtime downloads, then it is cached.
 
-> Browsers cannot open the sockets a broker API needs, so the hosted version has
-> no live market data — Live Dashboard and Live Test are inactive there. Every
-> page driven by the historical CSVs works normally. For live quotes, run
-> locally.
+> The hosted build has **no live market data** — Live Dashboard and Live Test
+> are inactive there. Not a CORS limitation (Angel One does allow browser
+> origins): stlite runs entirely client-side with no server, so any broker
+> credential would have to ship inside a public static file. That is full
+> account access published to the internet, TOTP seed included. Every page
+> driven by the historical CSVs works normally. For live quotes, run locally or
+> deploy to a server.
 
 ## Running locally
 
@@ -49,6 +52,23 @@ python scripts/angel_check.py
 
 `ANGEL_LIVE_TRADING=false` blocks every `place_order()` before any network call
 is made. Setting it to `true` transmits real orders.
+
+## Deploying with live data
+
+GitHub Pages cannot do this — it has no server. Use Streamlit Community Cloud,
+which keeps credentials server-side where visitors cannot read them:
+
+1. https://share.streamlit.io → sign in with GitHub
+2. New app → repo `amey6uug/20delta`, branch `main`, file `app.py`
+3. Settings → Secrets → paste the block from
+   `.streamlit/secrets.toml.example`, filled in
+
+Community Cloud apps are publicly reachable, so set `APP_PASSWORD` in secrets.
+The app refuses to render anything until that password is entered. Leave
+`ANGEL_LIVE_TRADING = "false"` unless you intend to place real orders from a
+public URL.
+
+Locally `APP_PASSWORD` is normally unset, and the gate stays off.
 
 ## Layout
 
