@@ -48,7 +48,43 @@ def render_live_test_page():
     s_spot, s_chg, s_pct, s_status = market_data_service.get_index_spot_price("SENSEX")
 
     if n_status == MarketDataStatus.UNAVAILABLE or s_status == MarketDataStatus.UNAVAILABLE:
-        st.warning("⚠️ Live market data connection unavailable. Live paper test is paused.")
+        # "Unavailable" has two very different causes. Saying which one saves
+        # the reader from assuming the page is broken.
+        import sys
+
+        from engine import angel_broker as _ab
+
+        if sys.platform == "emscripten":
+            st.warning("Live paper test is unavailable on the hosted version.")
+            st.markdown(
+                "This page runs **in your browser** as static files from GitHub "
+                "Pages. There is no server, so it has no broker credentials - those "
+                "live only in a local `.env`, which is deliberately never uploaded. "
+                "Publishing them here would expose the trading account to anyone "
+                "who opens this link."
+            )
+            st.markdown(
+                "**Works here:** Overview, Portfolio Analytics, Backtest Engine, "
+                "20D Short Strangle, Theta Shifting - all driven by historical data."
+            )
+            st.markdown("For live quotes and paper entry, run the app locally:")
+            st.code("streamlit run app.py", language="bash")
+        elif not _ab.credentials_present():
+            st.warning("Angel One is not configured, so there are no live quotes.")
+            st.markdown("Add your credentials to `.env` in the project folder:")
+            st.code(
+                "ANGEL_API_KEY=\nANGEL_CLIENT_CODE=\n"
+                "ANGEL_PIN=\nANGEL_TOTP_SECRET=",
+            )
+            st.caption("Then verify with: python scripts/angel_check.py")
+        else:
+            st.warning("Live market data is unreachable right now.")
+            st.caption(market_data_service.get_last_error() or "No further detail.")
+            st.markdown(
+                "Credentials are configured, so this is connectivity or market "
+                "hours rather than setup. Quotes are available 09:15-15:30 IST "
+                "on trading days."
+            )
         return
 
     # ── Session State Management ───────────────────────────────────────────────
